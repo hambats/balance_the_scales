@@ -64,21 +64,22 @@ cd balance-scales
 docker build -t balance-scales .
 ```
 
-3. Run the container
+3. Run the container (generate a 32-byte hex encryption key first)
 
 ```
-docker run -p 3000:3000 balance-scales
+docker run -p 3000:3000 \
+  -e ENCRYPTION_KEY=$(openssl rand -hex 32) \
+  -v $(pwd)/data:/data \
+  balance-scales
 ```
 
 Open [http://localhost:3000](http://localhost:3000)
 
-Persistent data can be enabled by mounting data.json
+### Encryption
 
-```
-docker run -p 3000:3000 \
-  -v $(pwd)/data.json:/usr/src/app/data.json \
-  balance-scales
-```
+Household data is encrypted at rest using AES-256-GCM. Supply a 32-byte hex
+`ENCRYPTION_KEY` when running the container. The encrypted database is stored in
+`/data/data.enc` by default, so mount a volume to persist it.
 
 ## Development Setup
 
@@ -135,7 +136,7 @@ balance-scales/
 │── server.js           # Node.js backend
 │── package.json        # Dependencies
 │── index.html          # Frontend UI
-│── data.json           # Household and task data store
+│── data.enc (ignored)  # Encrypted household data store
 ```
 
 ## Tech Stack

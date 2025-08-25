@@ -1,7 +1,9 @@
 FROM node:18-alpine
 WORKDIR /usr/src/app
-# Copy application source into container
+COPY package.json package-lock.json* ./
+RUN npm install --production
 COPY . .
-# Expose the application port
+VOLUME ["/data"]
+ENV DATA_FILE=/data/data.enc
 EXPOSE 3000
 CMD ["node", "server.js"]

@@ -2,13 +2,45 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
+const crypto = require('crypto');
 
-const DATA_FILE = path.join(__dirname, 'data.json');
+const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.enc');
+const ENCRYPTION_KEY_HEX = process.env.ENCRYPTION_KEY || '';
+if (ENCRYPTION_KEY_HEX.length !== 64) {
+  console.error('ENCRYPTION_KEY must be a 32-byte hex string');
+  process.exit(1);
+}
+const ENCRYPTION_KEY = Buffer.from(ENCRYPTION_KEY_HEX, 'hex');
+
+function encrypt(plaintext) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return JSON.stringify({
+    iv: iv.toString('hex'),
+    tag: tag.toString('hex'),
+    data: encrypted.toString('hex')
+  });
+}
+
+function decrypt(encText) {
+  const { iv, tag, data } = JSON.parse(encText);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+  decipher.setAuthTag(Buffer.from(tag, 'hex'));
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(data, 'hex')),
+    decipher.final()
+  ]);
+  return decrypted.toString('utf8');
+}
 
 // Load data from disk or return a default structure
 function loadData() {
   try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    const enc = fs.readFileSync(DATA_FILE, 'utf8');
+    const json = decrypt(enc);
+    return JSON.parse(json);
   } catch (err) {
     return {
       households: [],
@@ -22,7 +54,8 @@ function loadData() {
 
 // Save data back to disk
 function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  const enc = encrypt(JSON.stringify(data));
+  fs.writeFileSync(DATA_FILE, enc, 'utf8');
 }
 
 // Generate a share code using a restricted character set to avoid ambiguity
