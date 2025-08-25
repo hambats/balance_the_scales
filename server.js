@@ -127,7 +127,8 @@ function handleApi(req, res) {
           share_code: shareCode,
           users: [{ id: userId, name }],
           categories: [],
-          tasks: []
+          tasks: [],
+          overall_counts: { [userId]: 0 }
         };
         data.households.push(household);
         saveData(data);
@@ -151,6 +152,12 @@ function handleApi(req, res) {
         if (!household) return sendJSON(404, { error: 'Invalid code' });
         const userId = data.next_user_id++;
         household.users.push({ id: userId, name });
+        household.overall_counts = household.overall_counts || {};
+        household.overall_counts[userId] = 0;
+        for (const cat of household.categories) {
+          cat.task_counts = cat.task_counts || {};
+          cat.task_counts[userId] = 0;
+        }
         saveData(data);
         return sendJSON(200, { household_id: household.id, user_id: userId });
       } catch {
@@ -166,21 +173,31 @@ function handleApi(req, res) {
     const household = data.households.find(h => h.id === householdId);
     if (!household) return sendJSON(404, { error: 'Household not found' });
     const categories = household.categories.map(cat => {
-      const taskCounts = {};
-      // Initialize counts for each user
+      cat.task_counts = cat.task_counts || {};
+      const taskCounts = { ...cat.task_counts };
       for (const u of household.users) {
-        taskCounts[u.id] = 0;
-      }
-      // Sum weighted tasks per user
-      for (const t of household.tasks) {
-        if (t.category_id === cat.id) {
-          const weight = cat.weight || 1;
-          taskCounts[t.user_id] = (taskCounts[t.user_id] || 0) + weight;
+        if (taskCounts[u.id] === undefined) {
+          taskCounts[u.id] = 0;
         }
       }
       return { id: cat.id, name: cat.name, weight: cat.weight || 1, task_counts: taskCounts };
     });
     return sendJSON(200, categories);
+  }
+
+  // Master scale
+  if (method === 'GET' && pathName === '/api/master-scale') {
+    const householdId = parseInt(urlObj.searchParams.get('household_id') || '');
+    const household = data.households.find(h => h.id === householdId);
+    if (!household) return sendJSON(404, { error: 'Household not found' });
+    household.overall_counts = household.overall_counts || {};
+    const counts = { ...household.overall_counts };
+    for (const u of household.users) {
+      if (counts[u.id] === undefined) {
+        counts[u.id] = 0;
+      }
+    }
+    return sendJSON(200, { overall_counts: counts });
   }
 
   // Create category
@@ -198,7 +215,11 @@ function handleApi(req, res) {
           return sendJSON(409, { error: 'Category already exists' });
         }
         const categoryId = data.next_category_id++;
-        household.categories.push({ id: categoryId, name, weight: weight || 1 });
+        const taskCounts = {};
+        for (const u of household.users) {
+          taskCounts[u.id] = 0;
+        }
+        household.categories.push({ id: categoryId, name, weight: weight || 1, task_counts: taskCounts });
         saveData(data);
         return sendJSON(200, { id: categoryId, name, weight: weight || 1 });
       } catch {
@@ -219,15 +240,21 @@ function handleApi(req, res) {
         const categoryId = parseInt(category_id || '');
         if (!userId || !categoryId) return sendJSON(400, { error: 'user_id and category_id required' });
         let household = null;
+        let category = null;
         outer: for (const h of data.households) {
           const userExists = h.users.some(u => u.id === userId);
-          const catExists = h.categories.some(c => c.id === categoryId);
-          if (userExists && catExists) {
+          const cat = h.categories.find(c => c.id === categoryId);
+          if (userExists && cat) {
             household = h;
+            category = cat;
             break outer;
           }
         }
-        if (!household) return sendJSON(404, { error: 'Invalid user or category' });
+        if (!household || !category) return sendJSON(404, { error: 'Invalid user or category' });
+        category.task_counts = category.task_counts || {};
+        category.task_counts[userId] = (category.task_counts[userId] || 0) + 1;
+        household.overall_counts = household.overall_counts || {};
+        household.overall_counts[userId] = (household.overall_counts[userId] || 0) + (category.weight || 1);
         const taskId = data.next_task_id++;
         household.tasks.push({ id: taskId, user_id: userId, category_id: categoryId, timestamp: new Date().toISOString() });
         saveData(data);

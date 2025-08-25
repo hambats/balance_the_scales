@@ -19,6 +19,12 @@
 
   <!-- Main Content -->
   <main class="flex-1 p-4 space-y-6">
+    <!-- Master Scale section -->
+    <section id="masterScaleSection">
+      <h2 class="text-lg font-semibold mb-3">Overall Scale</h2>
+      <div id="masterScale" class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-6 flex overflow-hidden"></div>
+    </section>
+
     <!-- Tasks section -->
     <section id="tasksSection">
       <div class="flex justify-between items-center mb-3">
@@ -115,6 +121,16 @@
     let householdId = null;
     let userId = null;
     let users = [];
+    const userColors = [
+      "bg-blue-500",
+      "bg-green-500",
+      "bg-red-500",
+      "bg-yellow-500",
+      "bg-purple-500",
+      "bg-pink-500",
+      "bg-indigo-500",
+      "bg-teal-500"
+    ];
 
     function getCookie(name) {
       const value = `; ${document.cookie}`;
@@ -123,8 +139,13 @@
     }
 
     function showSection(sectionId) {
-      document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+      document.querySelectorAll('main > section').forEach(sec => {
+        if (sec.id !== 'masterScaleSection') {
+          sec.classList.add('hidden');
+        }
+      });
       document.getElementById(sectionId).classList.remove('hidden');
+      document.getElementById('masterScaleSection').classList.remove('hidden');
 
       // Reset nav buttons
       document.querySelectorAll('nav button').forEach(btn => {
@@ -180,11 +201,12 @@
         });
         total = total || 1;
         let bars = '';
-        users.forEach(u => {
+        users.forEach((u, idx) => {
           const count = cat.task_counts[u.id] || 0;
           const pct = ((count / total) * 100).toFixed(0);
           if (count > 0) {
-            bars += `<div class="bg-blue-500 h-5 text-xs text-white flex items-center justify-center" style="width:${pct}%">${u.name} (${count})</div>`;
+            const color = userColors[idx % userColors.length];
+            bars += `<div class="${color} h-5 text-xs text-white flex items-center justify-center" style="width:${pct}%">${u.name} (${count})</div>`;
           }
         });
         container.innerHTML += `
@@ -198,6 +220,31 @@
             </div>
           </div>
         `;
+      });
+    }
+
+    async function fetchMasterScale() {
+      const res = await fetch(`/api/master-scale?household_id=${householdId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      renderMasterScale(data.overall_counts);
+    }
+
+    function renderMasterScale(overallCounts) {
+      const container = document.getElementById('masterScale');
+      container.innerHTML = '';
+      let total = 0;
+      users.forEach(u => {
+        total += overallCounts[u.id] || 0;
+      });
+      total = total || 1;
+      users.forEach((u, idx) => {
+        const count = overallCounts[u.id] || 0;
+        const pct = ((count / total) * 100).toFixed(0);
+        if (count > 0) {
+          const color = userColors[idx % userColors.length];
+          container.innerHTML += `<div class="${color} h-6 text-xs text-white flex items-center justify-center" style="width:${pct}%">${u.name} (${count})</div>`;
+        }
       });
     }
 
@@ -225,6 +272,7 @@
       });
       await fetchCategories();
       await fetchHistory();
+      await fetchMasterScale();
     }
 
     async function addCategory() {
@@ -249,6 +297,7 @@
         body: JSON.stringify({ user_id: userId, name })
       });
       await fetchUsers();
+      await fetchMasterScale();
     }
 
     function toggleTheme() {
@@ -275,6 +324,7 @@
       await fetchUsers();
       await fetchCategories();
       await fetchHistory();
+      await fetchMasterScale();
     }
 
     async function submitAuth(mode) {
@@ -315,6 +365,7 @@
       await fetchUsers();
       await fetchCategories();
       await fetchHistory();
+      await fetchMasterScale();
     }
 
     init();
