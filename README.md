@@ -40,7 +40,6 @@ A lightweight household task-balancing web app built with Node.js, Express, Tail
 
 ## Quick Start (Docker)
 
-```bash
 # 1. Clone the repo
 git clone https://github.com/hambats/balance_the_scales.git
 cd balance_the_scales
