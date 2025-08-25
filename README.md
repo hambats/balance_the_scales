@@ -3,6 +3,8 @@
 A lightweight household task balancing web app.
 Built with Node.js, Express, and TailwindCSS, and packaged for easy deployment with Docker.
 
+Source code: https://github.com/hambats/balance_the_scales
+
 ## Overview
 
 Balance the Scales helps households fairly distribute and track recurring tasks.
@@ -54,31 +56,32 @@ Make sure Docker is installed.
 1. Clone the repository
 
 ```
-git clone https://github.com/yourusername/balance-scales.git
-cd balance-scales
+git clone https://github.com/hambats/balance_the_scales.git
+cd balance_the_scales
 ```
 
 2. Build the image
 
 ```
-docker build -t balance-scales .
+docker build -t balance-the-scales .
 ```
 
-3. Run the container
+3. Run the container (generate a 32-byte hex encryption key first)
 
 ```
-docker run -p 3000:3000 balance-scales
+docker run -p 3000:3000 \
+  -e ENCRYPTION_KEY=$(openssl rand -hex 32) \
+  -v $(pwd)/data:/data \
+  balance-the-scales
 ```
 
 Open [http://localhost:3000](http://localhost:3000)
 
-Persistent data can be enabled by mounting data.json
+### Encryption
 
-```
-docker run -p 3000:3000 \
-  -v $(pwd)/data.json:/usr/src/app/data.json \
-  balance-scales
-```
+Household data is encrypted at rest using AES-256-GCM. Supply a 32-byte hex
+`ENCRYPTION_KEY` when running the container. The encrypted database is stored in
+`/data/data.enc` by default, so mount a volume to persist it.
 
 ## Development Setup
 
@@ -87,7 +90,7 @@ If you want live reloading instead of rebuilding images
 ```
 docker run -p 3000:3000 \
   -v $(pwd):/usr/src/app \
-  balance-scales
+  balance-the-scales
 ```
 
 Then edit files locally. Changes will apply inside the container immediately.
@@ -130,12 +133,12 @@ The backend provides a simple JSON API. All requests and responses use JSON.
 ## Project Structure
 
 ```
-balance-scales/
+balance_the_scales/
 │── Dockerfile          # Container definition
 │── server.js           # Node.js backend
 │── package.json        # Dependencies
 │── index.html          # Frontend UI
-│── data.json           # Household and task data store
+│── data.enc (ignored)  # Encrypted household data store
 ```
 
 ## Tech Stack
@@ -151,4 +154,4 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 ## License
 
-MIT License
+GNU General Public License v3.0
