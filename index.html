@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Balance the Scales</title>
+  <!-- TailwindCSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Icons -->
+  <script src="https://kit.fontawesome.com/a2d9d6df6b.js" crossorigin="anonymous"></script>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md p-4 flex justify-between items-center">
+    <h1 class="text-xl font-bold">Balance the Scales</h1>
+    <span class="text-sm bg-white/20 px-3 py-1 rounded-full">Code: <span id="shareCode">---</span></span>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 p-4 space-y-6">
+    <!-- Tasks section -->
+    <section id="tasksSection">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-lg font-semibold">Tasks</h2>
+        <button onclick="showAddCategoryModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 rounded-full text-sm">
+          + Add
+        </button>
+      </div>
+      <div id="categories" class="grid gap-4 sm:grid-cols-2"></div>
+    </section>
+
+    <!-- History section -->
+    <section id="historySection" class="hidden">
+      <h2 class="text-lg font-semibold mb-3">Recent Activity</h2>
+      <div id="historyList" class="border-l-2 border-gray-300 pl-4 space-y-4"></div>
+    </section>
+
+    <!-- Settings section -->
+    <section id="settingsSection" class="hidden">
+      <h2 class="text-lg font-semibold mb-3">Settings</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block font-semibold mb-1">Your Name</label>
+          <input type="text" id="userNameInput" class="w-full border border-gray-300 rounded-md p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+          <button onclick="updateUserName()" class="mt-2 px-3 py-1 bg-indigo-500 text-white rounded-md">Save</button>
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Household Code</label>
+          <input type="text" id="householdCode" class="w-full border border-gray-300 rounded-md p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white" readonly>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('householdCode').value)" class="mt-2 px-3 py-1 bg-gray-400 text-black rounded-md">Copy</button>
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Preferences</label>
+          <button onclick="toggleTheme()" class="px-3 py-1 bg-indigo-500 text-white rounded-md">Toggle Dark Mode</button>
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Session</label>
+          <button onclick="logout()" class="px-3 py-1 bg-red-500 text-white rounded-md">Log Out</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Bottom Navigation -->
+  <nav class="fixed bottom-0 inset-x-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-inner flex justify-around py-2">
+    <button onclick="showSection('tasksSection')" class="flex flex-col items-center text-indigo-600">
+      <i class="fa-solid fa-list"></i>
+      <span class="text-xs">Tasks</span>
+    </button>
+    <button onclick="showSection('historySection')" class="flex flex-col items-center text-gray-500">
+      <i class="fa-solid fa-clock"></i>
+      <span class="text-xs">History</span>
+    </button>
+    <button onclick="showSection('settingsSection')" class="flex flex-col items-center text-gray-500">
+      <i class="fa-solid fa-gear"></i>
+      <span class="text-xs">Settings</span>
+    </button>
+  </nav>
+
+  <!-- Modal for adding categories -->
+  <div id="addCategoryModal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-80">
+      <h3 class="text-lg font-semibold mb-4">Add Category</h3>
+      <input type="text" id="newCategoryName" class="w-full border border-gray-300 rounded-md p-2 mb-3 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Category name">
+      <input type="number" id="newCategoryWeight" class="w-full border border-gray-300 rounded-md p-2 mb-3 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Weight (default 1)" value="1" min="1">
+      <div class="flex justify-end gap-2">
+        <button onclick="hideAddCategoryModal()" class="px-3 py-1 bg-gray-300 dark:bg-gray-600 rounded-md">Cancel</button>
+        <button onclick="addCategory()" class="px-3 py-1 bg-indigo-500 text-white rounded-md">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div id="authModal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-96">
+      <h3 class="text-lg font-semibold mb-4">Welcome to Balance the Scales</h3>
+      <div class="mb-3">
+        <label class="block font-semibold mb-1">Your Name</label>
+        <input type="text" id="authUserName" class="w-full border border-gray-300 rounded-md p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+      </div>
+      <div class="mb-3">
+        <label class="block font-semibold mb-1">Household Code</label>
+        <input type="text" id="authHouseholdCode" class="w-full border border-gray-300 rounded-md p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Leave blank to create new">
+      </div>
+      <div class="flex justify-end gap-2">
+        <button onclick="submitAuth('join')" class="px-3 py-1 bg-indigo-500 text-white rounded-md">Join Household</button>
+        <button onclick="submitAuth('create')" class="px-3 py-1 bg-green-500 text-white rounded-md">Create Household</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Script -->
+  <script>
+    let householdId = null;
+    let userId = null;
+    let users = [];
+
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    function showSection(sectionId) {
+      document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+      document.getElementById(sectionId).classList.remove('hidden');
+
+      // Reset nav buttons
+      document.querySelectorAll('nav button').forEach(btn => {
+        btn.classList.remove('text-indigo-600');
+        btn.classList.add('text-gray-500');
+      });
+
+      // Highlight active
+      const activeBtn = Array.from(document.querySelectorAll('nav button'))
+        .find(btn => btn.getAttribute('onclick').includes(sectionId));
+      if (activeBtn) {
+        activeBtn.classList.remove('text-gray-500');
+        activeBtn.classList.add('text-indigo-600');
+      }
+    }
+
+    function showAddCategoryModal() {
+      document.getElementById('addCategoryModal').classList.remove('hidden');
+    }
+    function hideAddCategoryModal() {
+      document.getElementById('addCategoryModal').classList.add('hidden');
+      document.getElementById('newCategoryName').value = '';
+      document.getElementById('newCategoryWeight').value = 1;
+    }
+
+    async function fetchUsers() {
+      const res = await fetch(`/api/users?household_id=${householdId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      users = data.users;
+      document.getElementById('shareCode').innerText = data.share_code || '---';
+      document.getElementById('householdCode').value = data.share_code || '';
+      const me = users.find(u => u.id == userId);
+      if (me) {
+        document.getElementById('userNameInput').value = me.name;
+      }
+    }
+
+    async function fetchCategories() {
+      const res = await fetch(`/api/categories?household_id=${householdId}`);
+      if (!res.ok) return;
+      const categories = await res.json();
+      renderCategories(categories);
+    }
+
+    function renderCategories(categories) {
+      const container = document.getElementById('categories');
+      container.innerHTML = '';
+      categories.forEach(cat => {
+        let total = 0;
+        users.forEach(u => {
+          total += cat.task_counts[u.id] || 0;
+        });
+        total = total || 1;
+        let bars = '';
+        users.forEach(u => {
+          const count = cat.task_counts[u.id] || 0;
+          const pct = ((count / total) * 100).toFixed(0);
+          if (count > 0) {
+            bars += `<div class="bg-blue-500 h-5 text-xs text-white flex items-center justify-center" style="width:${pct}%">${u.name} (${count})</div>`;
+          }
+        });
+        container.innerHTML += `
+          <div class="rounded-2xl shadow-lg bg-white dark:bg-gray-800 p-4 flex flex-col gap-3">
+            <div class="flex justify-between items-center">
+              <h3 class="font-semibold">${cat.name} (Weight: ${cat.weight || 1})</h3>
+              <button onclick="logTask(${cat.id})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-full text-sm">I did it</button>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-5 flex overflow-hidden">
+              ${bars || '<span class="text-xs text-gray-500 p-1">No tasks yet</span>'}
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    async function fetchHistory() {
+      const res = await fetch(`/api/history?household_id=${householdId}`);
+      if (!res.ok) return;
+      const history = await res.json();
+      const container = document.getElementById('historyList');
+      container.innerHTML = '';
+      history.forEach(item => {
+        container.innerHTML += `
+          <div>
+            <span class="font-semibold">${item.user}</span> completed <span class="italic">${item.category}</span>
+            <span class="text-gray-500 text-sm block">${item.time}</span>
+          </div>
+        `;
+      });
+    }
+
+    async function logTask(categoryId) {
+      await fetch('/api/task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, category_id: categoryId })
+      });
+      await fetchCategories();
+      await fetchHistory();
+    }
+
+    async function addCategory() {
+      const name = document.getElementById('newCategoryName').value.trim();
+      const weight = parseInt(document.getElementById('newCategoryWeight').value) || 1;
+      if (!name) return;
+      await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ household_id: householdId, name, weight })
+      });
+      hideAddCategoryModal();
+      await fetchCategories();
+    }
+
+    async function updateUserName() {
+      const name = document.getElementById('userNameInput').value.trim();
+      if (!name) return;
+      await fetch('/api/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, name })
+      });
+      await fetchUsers();
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+    }
+
+    function logout() {
+      document.cookie = 'household_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = 'user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      window.location.reload();
+    }
+
+    async function init() {
+      householdId = getCookie('household_id');
+      userId = getCookie('user_id');
+
+      if (!householdId || !userId) {
+        document.getElementById('authModal').classList.remove('hidden');
+        return;
+      }
+
+      householdId = parseInt(householdId);
+      userId = parseInt(userId);
+      await fetchUsers();
+      await fetchCategories();
+      await fetchHistory();
+    }
+
+    async function submitAuth(mode) {
+      const name = document.getElementById('authUserName').value.trim();
+      const code = document.getElementById('authHouseholdCode').value.trim();
+
+      if (!name) {
+        alert("Please enter your name.");
+        return;
+      }
+
+      let response;
+      if (mode === 'join' && code) {
+        response = await fetch('/api/join-household', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, name })
+        });
+      } else {
+        response = await fetch('/api/create-household', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+      }
+
+      const data = await response.json();
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 30);
+      document.cookie = `household_id=${data.household_id}; expires=${expires.toUTCString()}; path=/;`;
+      document.cookie = `user_id=${data.user_id}; expires=${expires.toUTCString()}; path=/;`;
+
+      householdId = data.household_id;
+      userId = data.user_id;
+
+      document.getElementById('authModal').classList.add('hidden');
+
+      await fetchUsers();
+      await fetchCategories();
+      await fetchHistory();
+    }
+
+    init();
+  </script>
+</body>
+</html>

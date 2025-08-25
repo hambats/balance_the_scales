@@ -1,0 +1,285 @@
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { URL } = require('url');
+
+const DATA_FILE = path.join(__dirname, 'data.json');
+
+// Load data from disk or return a default structure
+function loadData() {
+  try {
+    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  } catch (err) {
+    return {
+      households: [],
+      next_household_id: 1,
+      next_user_id: 1,
+      next_category_id: 1,
+      next_task_id: 1
+    };
+  }
+}
+
+// Save data back to disk
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
+// Generate a share code using a restricted character set to avoid ambiguity
+function generateShareCode(length = 6) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// Serve static files from the project root
+function serveStatic(req, res) {
+  let filePath = req.url.split('?')[0];
+  if (filePath === '/' || filePath === '') {
+    filePath = '/index.html';
+  }
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes = {
+    '.html': 'text/html',
+    '.js': 'application/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml'
+  };
+  const absPath = path.join(__dirname, filePath);
+  fs.readFile(absPath, (err, content) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not Found');
+    } else {
+      const type = mimeTypes[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': type });
+      res.end(content);
+    }
+  });
+}
+
+// Handle all API endpoints under /api/
+function handleApi(req, res) {
+  const urlObj = new URL(req.url, `http://${req.headers.host}`);
+  const pathName = urlObj.pathname;
+  const method = req.method;
+  const data = loadData();
+
+  // Helper for sending JSON responses
+  function sendJSON(status, obj) {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(obj));
+  }
+
+  // Users endpoint
+  if (method === 'GET' && pathName === '/api/users') {
+    const householdId = parseInt(urlObj.searchParams.get('household_id') || '');
+    const household = data.households.find(h => h.id === householdId);
+    if (!household) return sendJSON(404, { error: 'Household not found' });
+    return sendJSON(200, { users: household.users, share_code: household.share_code });
+  }
+
+  // Update user name
+  if (method === 'POST' && pathName === '/api/update-user') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { user_id, name } = JSON.parse(body);
+        if (!user_id || !name) return sendJSON(400, { error: 'user_id and name required' });
+        for (const h of data.households) {
+          const user = h.users.find(u => u.id === user_id);
+          if (user) {
+            user.name = name;
+            saveData(data);
+            return sendJSON(200, { success: true, user });
+          }
+        }
+        return sendJSON(404, { error: 'User not found' });
+      } catch {
+        return sendJSON(400, { error: 'Invalid JSON' });
+      }
+    });
+    return;
+  }
+
+  // Create household
+  if (method === 'POST' && pathName === '/api/create-household') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { name } = JSON.parse(body);
+        if (!name) return sendJSON(400, { error: 'name required' });
+        const householdId = data.next_household_id++;
+        const userId = data.next_user_id++;
+        const shareCode = generateShareCode();
+        const household = {
+          id: householdId,
+          share_code: shareCode,
+          users: [{ id: userId, name }],
+          categories: [],
+          tasks: []
+        };
+        data.households.push(household);
+        saveData(data);
+        return sendJSON(200, { household_id: householdId, user_id: userId, share_code: shareCode });
+      } catch {
+        return sendJSON(400, { error: 'Invalid JSON' });
+      }
+    });
+    return;
+  }
+
+  // Join household
+  if (method === 'POST' && pathName === '/api/join-household') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { code, name } = JSON.parse(body);
+        if (!code || !name) return sendJSON(400, { error: 'code and name required' });
+        const household = data.households.find(h => h.share_code.toUpperCase() === code.toUpperCase());
+        if (!household) return sendJSON(404, { error: 'Invalid code' });
+        const userId = data.next_user_id++;
+        household.users.push({ id: userId, name });
+        saveData(data);
+        return sendJSON(200, { household_id: household.id, user_id: userId });
+      } catch {
+        return sendJSON(400, { error: 'Invalid JSON' });
+      }
+    });
+    return;
+  }
+
+  // Get categories
+  if (method === 'GET' && pathName === '/api/categories') {
+    const householdId = parseInt(urlObj.searchParams.get('household_id') || '');
+    const household = data.households.find(h => h.id === householdId);
+    if (!household) return sendJSON(404, { error: 'Household not found' });
+    const categories = household.categories.map(cat => {
+      const taskCounts = {};
+      // Initialize counts for each user
+      for (const u of household.users) {
+        taskCounts[u.id] = 0;
+      }
+      // Sum weighted tasks per user
+      for (const t of household.tasks) {
+        if (t.category_id === cat.id) {
+          const weight = cat.weight || 1;
+          taskCounts[t.user_id] = (taskCounts[t.user_id] || 0) + weight;
+        }
+      }
+      return { id: cat.id, name: cat.name, weight: cat.weight || 1, task_counts: taskCounts };
+    });
+    return sendJSON(200, categories);
+  }
+
+  // Create category
+  if (method === 'POST' && pathName === '/api/categories') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { household_id, name, weight } = JSON.parse(body);
+        const householdId = parseInt(household_id || '');
+        if (!householdId || !name) return sendJSON(400, { error: 'household_id and name required' });
+        const household = data.households.find(h => h.id === householdId);
+        if (!household) return sendJSON(404, { error: 'Household not found' });
+        if (household.categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+          return sendJSON(409, { error: 'Category already exists' });
+        }
+        const categoryId = data.next_category_id++;
+        household.categories.push({ id: categoryId, name, weight: weight || 1 });
+        saveData(data);
+        return sendJSON(200, { id: categoryId, name, weight: weight || 1 });
+      } catch {
+        return sendJSON(400, { error: 'Invalid JSON' });
+      }
+    });
+    return;
+  }
+
+  // Log task
+  if (method === 'POST' && pathName === '/api/task') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { user_id, category_id } = JSON.parse(body);
+        const userId = parseInt(user_id || '');
+        const categoryId = parseInt(category_id || '');
+        if (!userId || !categoryId) return sendJSON(400, { error: 'user_id and category_id required' });
+        let household = null;
+        outer: for (const h of data.households) {
+          const userExists = h.users.some(u => u.id === userId);
+          const catExists = h.categories.some(c => c.id === categoryId);
+          if (userExists && catExists) {
+            household = h;
+            break outer;
+          }
+        }
+        if (!household) return sendJSON(404, { error: 'Invalid user or category' });
+        const taskId = data.next_task_id++;
+        household.tasks.push({ id: taskId, user_id: userId, category_id: categoryId, timestamp: new Date().toISOString() });
+        saveData(data);
+        return sendJSON(200, { success: true, task_id: taskId });
+      } catch {
+        return sendJSON(400, { error: 'Invalid JSON' });
+      }
+    });
+    return;
+  }
+
+  // Get history
+  if (method === 'GET' && pathName === '/api/history') {
+    const householdId = parseInt(urlObj.searchParams.get('household_id') || '');
+    const household = data.households.find(h => h.id === householdId);
+    if (!household) return sendJSON(404, { error: 'Household not found' });
+    const history = household.tasks
+      .slice(-20)
+      .reverse()
+      .map(t => {
+        const user = household.users.find(u => u.id === t.user_id);
+        const cat = household.categories.find(c => c.id === t.category_id);
+        return {
+          user: user ? user.name : '',
+          category: cat ? cat.name : '',
+          time: new Date(t.timestamp).toLocaleString()
+        };
+      });
+    return sendJSON(200, history);
+  }
+
+  // If no endpoint matched
+  return sendJSON(404, { error: 'Not found' });
+}
+
+// Create and start the HTTP server
+const server = http.createServer((req, res) => {
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
+  if (req.url.startsWith('/api/')) {
+    return handleApi(req, res);
+  }
+  return serveStatic(req, res);
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
