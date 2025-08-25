@@ -1,155 +1,117 @@
 # Balance the Scales
 
-A lightweight household task balancing web app.
-Built with Node.js, Express, and TailwindCSS, and packaged for easy deployment with Docker.
+A lightweight household task-balancing web app built with Node.js, Express, TailwindCSS, and Docker.
 
 ## Overview
 
-Balance the Scales helps households fairly distribute and track recurring tasks.
-Each member logs the chores they complete, and the app tracks progress using task categories and configurable weights.
+**Balance the Scales** helps households fairly track and distribute recurring chores. Each member logs completed tasks, and the app visualizes progress using weighted categories.
 
 ## Features
 
-Households
+- **Households**
+  - The first user creates a household and gets a share code.
+  - Others can join using that share code.
 
-* First user creates a household which generates a share code
-* Other users join using that share code
+- **Users**
+  - Multiple users per household.
+  - Update usernames in Settings.
 
-Users
+- **Categories**
+  - Define chore categories (e.g. Dishes, Laundry).
+  - Assign weights so tougher chores count more.
 
-* Each household can have multiple users
-* Usernames can be updated in the Settings tab
+- **Task Logging**
+  - One-click task logging.
+  - Visual progress bars for each user’s share.
 
-Categories
+- **History**
+  - Activity log displays recent tasks by user.
 
-* Add tasks grouped into categories such as Dishes or Laundry
-* Categories can have weights so harder chores count more
+- **Settings**
+  - Change username
+  - Copy household share code
+  - Toggle dark mode
+  - Log out (clears cookies)
 
-Task Logging
+- **Responsive UI**
+  - Built with TailwindCSS.
+  - Works seamlessly on desktop and mobile.
+  - Bottom navigation highlights the current section.
 
-* One click logging of completed tasks
-* Visual progress bars show each user’s share
+## Quick Start (Docker)
 
-History
+```bash
+# 1. Clone the repo
+git clone https://github.com/hambats/balance_the_scales.git
+cd balance_the_scales
 
-* Recent activity log of completed tasks by user
+# 2. Build the Docker image
+docker build -t balance_the_scales .
 
-Settings
-
-* Update username
-* Copy household code
-* Toggle dark mode
-* Log out which clears cookies
-
-UI
-
-* Built with TailwindCSS
-* Works on desktop and mobile
-* Bottom navigation highlights the active section
-
-## Quick Start with Docker
-
-Make sure Docker is installed.
-
-1. Clone the repository
-
-```
-git clone https://github.com/yourusername/balance-scales.git
-cd balance-scales
-```
-
-2. Build the image
-
-```
-docker build -t balance-scales .
-```
-
-3. Run the container (generate a 32-byte hex encryption key first)
-
-```
+# 3. Run the container (requires a 32-byte hex encryption key)
 docker run -p 3000:3000 \
   -e ENCRYPTION_KEY=$(openssl rand -hex 32) \
-  -v $(pwd)/data:/data \
-  balance-scales
-```
+  -v "$(pwd)/data:/data" \
+  balance_the_scales
 
-Open [http://localhost:3000](http://localhost:3000)
+Then open your browser to http://localhost:3000.
+Encryption at Rest
 
-### Encryption
+Household data is encrypted using AES-256-GCM. Supply a 32-byte hex ENCRYPTION_KEY when running Docker. The encrypted database is stored at /data/data.enc; use a mounted volume to preserve data.
+Development Setup
 
-Household data is encrypted at rest using AES-256-GCM. Supply a 32-byte hex
-`ENCRYPTION_KEY` when running the container. The encrypted database is stored in
-`/data/data.enc` by default, so mount a volume to persist it.
+For live reloading during development:
 
-## Development Setup
-
-If you want live reloading instead of rebuilding images
-
-```
 docker run -p 3000:3000 \
-  -v $(pwd):/usr/src/app \
-  balance-scales
-```
+  -v "$(pwd)":/usr/src/app \
+  balance_the_scales
 
-Then edit files locally. Changes will apply inside the container immediately.
+Edit files locally—changes apply instantly in the container.
+Hosting Online
 
-## Hosting Online
+Easily expose your instance to the web using reverse proxies like Nginx Proxy Manager, Caddy, or Cloudflare Tunnel.
+API Endpoints
+Endpoint	Method	Input	Output
+/api/create-household	POST	{ "name": "UserName" }	{ household_id, user_id, share_code }
+/api/join-household	POST	{ "code": "ABC123", "name": "UserName" }	{ household_id, user_id }
+/api/users	GET	?household_id=1	{ users: [...], share_code: "ABC123" }
+/api/categories	GET	?household_id=1	Categories list with weights and task counts
+	POST	{ "household_id":1, "name":"Laundry", "weight":1 }	new category
+/api/task	POST	{ "user_id": 1, "category_id": 1 }	Log a completed task
+/api/history	GET	?household_id=1	Task history logs
+/api/update-user	POST	{ "user_id": 1, "name": "NewName" }	Update username
 
-This service can be exposed on the web via a reverse proxy.
-Common setups include Nginx Proxy Manager, Caddy, or Cloudflare Tunnel.
+Example (history output):
 
-## API Endpoints
+[
+  {
+    "user": "Alice",
+    "category": "Dishes",
+    "time": "2025-08-24T12:34:56Z"
+  }
+]
 
-The backend provides a simple JSON API. All requests and responses use JSON.
+Project Structure
 
-* POST `/api/create-household`
-  Input: `{ "name": "UserName" }`
-  Output: `{ "household_id": 1, "user_id": 1, "share_code": "ABC123" }`
+balance_the_scales/
+├── Dockerfile           # Container build instructions
+├── server.js            # Node.js backend
+├── package.json         # Dependencies and scripts
+├── index.html           # Frontend UI
+├── data.enc             # Encrypted household data (ignored in git)
+└── README.md            # This file
 
-* POST `/api/join-household`
-  Input: `{ "code": "ABC123", "name": "UserName" }`
-  Output: `{ "household_id": 1, "user_id": 2 }`
+Tech Stack
 
-* GET `/api/users?household_id=1`
-  Output: `{ "users": [...], "share_code": "ABC123" }`
+    Backend: Node.js, Express
 
-* GET `/api/categories?household_id=1`
-  Output: `[ { "id": 1, "name": "Dishes", "weight": 2, "task_counts": { "1": 3 } } ]`
+    Frontend: TailwindCSS, Font Awesome
 
-* POST `/api/categories`
-  Input: `{ "household_id": 1, "name": "Laundry", "weight": 1 }`
+    Deployment: Docker
 
-* POST `/api/task`
-  Input: `{ "user_id": 1, "category_id": 1 }`
+Contributing
 
-* GET `/api/history?household_id=1`
-  Output: `[ { "user": "Alice", "category": "Dishes", "time": "2025-08-24T12:34:56Z" } ]`
+Pull requests are welcome! For significant changes, please open an issue first to discuss.
+License
 
-* POST `/api/update-user`
-  Input: `{ "user_id": 1, "name": "NewName" }`
-
-## Project Structure
-
-```
-balance-scales/
-│── Dockerfile          # Container definition
-│── server.js           # Node.js backend
-│── package.json        # Dependencies
-│── index.html          # Frontend UI
-│── data.enc (ignored)  # Encrypted household data store
-```
-
-## Tech Stack
-
-* Node.js and Express for the backend
-* TailwindCSS for frontend styling
-* Font Awesome for icons
-* Docker for deployment
-
-## Contributing
-
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-## License
-
-MIT License
+Licensed under GPL-3.0. Feel free to review the full license in LICENSE.
