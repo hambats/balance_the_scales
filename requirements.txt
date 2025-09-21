@@ -1,0 +1,5 @@
+flask>=3.0.0
+ultralytics>=8.2.0
+opencv-python-headless>=4.9.0.80
+requests>=2.31.0
+python-dotenv>=1.0.0
