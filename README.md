@@ -1,116 +1,89 @@
-# Balance the Scales
+# BearWatch
 
-A lightweight household task-balancing web app built with Node.js, Express, TailwindCSS, and Docker.
-
-## Overview
-
-**Balance the Scales** helps households fairly track and distribute recurring chores. Each member logs completed tasks, and the app visualizes progress using weighted categories.
+BearWatch is a lightweight RTSP monitoring stack that performs real-time YOLO detection, highlights a chosen class, and publishes alerts with annotated snapshots. The service ships with a Flask API, MJPEG stream, Discord webhook integration, and a responsive control dashboard.
 
 ## Features
 
-- **Households**
-  - The first user creates a household and gets a share code.
-  - Others can join using that share code.
+- **Continuous Detection** – Ultralytics YOLO runs inside a background detector thread, smoothing FPS and enforcing cooldowns between alerts.
+- **Target Monitoring** – Change the monitored class at runtime; alerts fire when a detection persists for a configurable number of frames.
+- **MJPEG Streaming** – `/video` streams annotated frames to the dashboard and any MJPEG-compatible clients.
+- **Alerting** – Captures are saved to disk, listed via `/alerts`, and optionally pushed to Discord webhooks.
+- **Runtime Status** – `/status` exposes FPS, cooldown state, debug telemetry, and recent detections for observability.
+- **Responsive Dashboard** – `index.html` provides controls for class selection, manual snapshots, live status, and alert history.
 
-- **Users**
-  - Multiple users per household.
-  - Update usernames in Settings.
+## Quick Start
 
-- **Categories**
-  - Define chore categories (e.g. Dishes, Laundry).
-  - Assign weights so tougher chores count more.
+1. Install dependencies (Python 3.11 recommended):
 
-- **Task Logging**
-  - One-click task logging.
-  - Visual progress bars for each user’s share.
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-- **History**
-  - Activity log displays recent tasks by user.
+2. Run the service (either set `RTSP` in the environment or provide `--rtsp`):
 
-- **Settings**
-  - Change username
-  - Copy household share code
-  - Toggle dark mode
-  - Log out (clears cookies)
+   ```bash
+   export RTSP="rtsp://camera/stream"
+   python -m bearwatch --model yolov8n.pt
+   ```
 
-- **Responsive UI**
-  - Built with TailwindCSS.
-  - Works seamlessly on desktop and mobile.
-  - Bottom navigation highlights the current section.
+3. Open the dashboard at [http://localhost:8080](http://localhost:8080).
 
-## Quick Start (Docker)
+## Configuration
 
-# 1. Clone the repo
-git clone https://github.com/hambats/balance_the_scales.git
-cd balance_the_scales
+Every CLI flag has an environment variable equivalent. Common options:
 
-# 2. Build the Docker image
-docker build -t balance_the_scales .
+| Flag | Env | Default | Description |
+| --- | --- | --- | --- |
+| `--model` | `YOLO_MODEL` | `yolov8n.pt` | YOLO weights to load |
+| `--conf` | `CONF_THRES` | `0.5` | Detection confidence threshold |
+| `--iou` | `IOU_THRES` | `0.5` | IOU threshold for NMS |
+| `--req_frames` | `REQ_FRAMES` | `5` | Consecutive frames required before alerting |
+| `--min_h_frac` | `MIN_H_FRAC` | `0.25` | Minimum bounding-box height fraction |
+| `--cooldown` | `COOLDOWN_SEC` | `30` | Cooldown window (seconds) |
+| `--imgsz` | `IMG_SIZE` | `640` | Inference input size |
+| `--save_dir` | `SAVE_DIR` | `./data` | Base directory for saved captures |
+| `--webhook` | `DISCORD_WEBHOOK` | `None` | Discord webhook for notifications |
+| `--jpeg_quality` | `JPEG_QUALITY` | `80` | JPEG encoding quality |
+| `--ff_retry` | `FF_RETRY_MS` | `2000` | Delay between RTSP reconnect attempts (ms) |
+| `--debug` | `DEBUG` | `False` | Enable verbose logging and debug overlays |
 
-# 3. Run the container (requires a 32-byte hex encryption key)
-docker run -p 3000:3000 \
-  -e ENCRYPTION_KEY=$(openssl rand -hex 32) \
-  -v "$(pwd)/data:/data" \
-  balance_the_scales
+## API Overview
 
-Then open your browser to http://localhost:3000.
-Encryption at Rest
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/` | Dashboard HTML |
+| `GET` | `/video` | Multipart MJPEG stream |
+| `GET` | `/status` | System snapshot including FPS, cooldown, debug data |
+| `GET` | `/alerts` | Recent alerts (optional `limit` query) |
+| `POST` | `/monitor` | Update monitored class `{ "class": "bear" }` |
+| `POST` | `/trigger` | Force-save current annotated frame |
+| `GET` | `/capture/<filename>` | Serve saved JPEG |
+| `GET` | `/config` | Current configuration sans secrets |
 
-Household data is encrypted using AES-256-GCM. Supply a 32-byte hex ENCRYPTION_KEY when running Docker. The encrypted database is stored at /data/data.enc; use a mounted volume to preserve data.
-Development Setup
+## Docker
 
-For live reloading during development:
+A production image is provided via the included `Dockerfile`:
 
-docker run -p 3000:3000 \
-  -v "$(pwd)":/usr/src/app \
-  balance_the_scales
+```bash
+docker build -t bearwatch .
+docker run --rm \
+  -e RTSP="rtsp://camera/stream" \
+  -p 8080:8080 \
+  -v $(pwd)/data:/data \
+  bearwatch
+```
 
-Edit files locally—changes apply instantly in the container.
-Hosting Online
+The container installs FFmpeg and OpenCV runtime dependencies, stores captures at `/data/captures`, and starts the application with `python -m bearwatch`.
 
-Easily expose your instance to the web using reverse proxies like Nginx Proxy Manager, Caddy, or Cloudflare Tunnel.
-API Endpoints
-Endpoint	Method	Input	Output
-/api/create-household	POST	{ "name": "UserName" }	{ household_id, user_id, share_code }
-/api/join-household	POST	{ "code": "ABC123", "name": "UserName" }	{ household_id, user_id }
-/api/users	GET	?household_id=1	{ users: [...], share_code: "ABC123" }
-/api/categories	GET	?household_id=1	Categories list with weights and task counts
-	POST	{ "household_id":1, "name":"Laundry", "weight":1 }	new category
-/api/task	POST	{ "user_id": 1, "category_id": 1 }	Log a completed task
-/api/history	GET	?household_id=1	Task history logs
-/api/update-user	POST	{ "user_id": 1, "name": "NewName" }	Update username
+## Development Notes
 
-Example (history output):
+- The detector thread is a daemon that respects a shutdown event triggered at exit.
+- Captures are stored under `SAVE_DIR/captures`; ensure persistent storage in production.
+- Discord webhook failures are logged but never raise exceptions.
+- The dashboard polls `/status` and `/alerts` with exponential backoff on errors.
 
-[
-  {
-    "user": "Alice",
-    "category": "Dishes",
-    "time": "2025-08-24T12:34:56Z"
-  }
-]
+## License
 
-Project Structure
-
-balance_the_scales/
-├── Dockerfile           # Container build instructions
-├── server.js            # Node.js backend
-├── package.json         # Dependencies and scripts
-├── index.html           # Frontend UI
-├── data.enc             # Encrypted household data (ignored in git)
-└── README.md            # This file
-
-Tech Stack
-
-    Backend: Node.js, Express
-
-    Frontend: TailwindCSS, Font Awesome
-
-    Deployment: Docker
-
-Contributing
-
-Pull requests are welcome! For significant changes, please open an issue first to discuss.
-License
-
-Licensed under GPL-3.0. Feel free to review the full license in LICENSE.
+This project inherits the GPL-3.0 license from the original repository. See `LICENSE` for full details.
